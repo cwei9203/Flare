@@ -12,6 +12,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -20,7 +21,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -32,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.keepScreenOn
@@ -40,11 +44,13 @@ import androidx.compose.ui.layout.onLayoutRectChanged
 import androidx.compose.ui.layout.onVisibilityChanged
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.getSystemService
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -169,11 +175,18 @@ public fun VideoPlayer(
     var isLoaded by remember { mutableStateOf(false) }
     var visible by remember { mutableStateOf(false) }
     var currentRect by remember { mutableStateOf(IntRect.Zero) }
+    val speedOptions = listOf(1f, 1.5f, 2f, 3f)
+    var speedIndex by remember { mutableStateOf(0) }
+    val currentSpeed = speedOptions[speedIndex]
     val binding = rememberSurfaceBinding(uri)
     val player = binding.first
 
     LaunchedEffect(binding.second, currentRect, visible) {
         binding.second.update(currentRect, visible)
+    }
+
+    LaunchedEffect(player, currentSpeed) {
+        player?.playbackParameters = player.playbackParameters.withSpeed(currentSpeed)
     }
 
     Box(
@@ -270,6 +283,26 @@ public fun VideoPlayer(
                             modifier = playerModifier,
                         )
                         remainingTimeContent?.invoke(this, remainingTime)
+                        if (showControls) {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .padding(8.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.5f))
+                                        .clickable {
+                                            speedIndex = (speedIndex + 1) % speedOptions.size
+                                        }.padding(horizontal = 10.dp, vertical = 6.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = "${currentSpeed}x",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                )
+                            }
+                        }
                     }
                 } else {
                     Box {
