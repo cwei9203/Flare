@@ -453,6 +453,12 @@ internal sealed interface Route : NavKey {
     ) : Route
 
     @Serializable
+    data class VVOSecondaryVerification(
+        val accountKey: MicroBlogKey?,
+        val url: String,
+    ) : Route
+
+    @Serializable
     public data class BlockUser(
         val accountType: AccountType?,
         val userKey: MicroBlogKey,
@@ -499,6 +505,11 @@ internal sealed interface Route : NavKey {
                             ),
                     )
                 is DeeplinkRoute.OpenLinkDirectly -> null
+                is DeeplinkRoute.VVOSecondaryVerification ->
+                    Route.VVOSecondaryVerification(
+                        accountKey = deeplinkRoute.accountKey,
+                        url = deeplinkRoute.url,
+                    )
                 is DeeplinkRoute.DeepLinkAccountPicker ->
                     DeepLinkAccountPicker(
                         originalUrl = deeplinkRoute.originalUrl,

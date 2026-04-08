@@ -30,6 +30,7 @@ import dev.dimension.flare.ui.screen.rss.rssEntryBuilder
 import dev.dimension.flare.ui.screen.serviceselect.serviceSelectEntryBuilder
 import dev.dimension.flare.ui.screen.settings.settingsSelectEntryBuilder
 import dev.dimension.flare.ui.screen.status.statusEntryBuilder
+import dev.dimension.flare.ui.screen.webview.webViewEntryBuilder
 import soup.compose.material.motion.animation.holdIn
 import soup.compose.material.motion.animation.holdOut
 import soup.compose.material.motion.animation.materialElevationScaleIn
@@ -103,6 +104,7 @@ internal fun Router(
                 settingsSelectEntryBuilder(navigate, onBack)
                 statusEntryBuilder(navigate, onBack)
                 misskeyEntryBuilder(navigate, onBack)
+                webViewEntryBuilder(onBack)
             },
     )
 }

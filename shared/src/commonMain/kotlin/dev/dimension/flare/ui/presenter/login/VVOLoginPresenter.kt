@@ -68,7 +68,10 @@ public class VVOLoginPresenter(
         val service = VVOService(flowOf(chocolate))
         val config = service.config()
         if (config.data?.login != true) {
-            throw VVOVerificationRequiredException("https://$vvoHost/captcha")
+            throw VVOVerificationRequiredException(
+                url = "https://$vvoHost/captcha",
+                accountKey = null,
+            )
         }
         val configData = requireNotNull(config.data) { "config is null" }
         val uid = configData.uid

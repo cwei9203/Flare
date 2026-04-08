@@ -18,6 +18,7 @@ import dev.dimension.flare.model.MicroBlogKey
 import dev.dimension.flare.model.PlatformType
 import dev.dimension.flare.model.vvoHost
 import io.ktor.client.call.body
+import io.ktor.client.call.save
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.api.createClientPlugin
 import io.ktor.client.request.forms.append
@@ -32,6 +33,8 @@ import io.ktor.http.contentType
 import io.ktor.utils.io.core.writeFully
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.time.Duration.Companion.minutes
 
 private val baseUrl = "https://$vvoHost/"
@@ -161,29 +164,85 @@ private val VVOHeaderPlugin =
             request.headers.append("Referer", "https://$vvoHost/")
         }
         onResponse { response ->
-            if (response.requiresVerification()) {
-                val exception =
-                    accountKey?.let {
-                        LoginExpiredException(
-                            accountKey = it,
-                            platformType = PlatformType.VVo,
-                        )
-                    } ?: VVOVerificationRequiredException(response.call.request.url.toString())
-                throw exception
+            val redirectVerificationUrl = response.detectRedirectVerificationUrl()
+            val captchaUrl = response.detectVvoCaptchaUrl()
+            val htmlRequiresVerification = response.detectHtmlVerificationRequired()
+            if (
+                redirectVerificationUrl != null ||
+                captchaUrl != null ||
+                htmlRequiresVerification ||
+                response.requestUrlContainsVerificationHints()
+            ) {
+                // 这里并不代表登录过期（那会由 ensureLogin() 的 config.login 判断）
+                // 该分支通常是微博触发了二次验证/验证码拦截，需要用户在浏览器里完成验证
+                throw VVOVerificationRequiredException(
+                    redirectVerificationUrl ?: captchaUrl ?: response.call.request.url.toString(),
+                    accountKey = accountKey,
+                )
             }
         }
     }
 
-private fun io.ktor.client.statement.HttpResponse.requiresVerification(): Boolean {
-    val contentType = contentType()
-    return isHtmlResponse(contentType) || containsVerificationHints(call.request.url)
+private fun io.ktor.client.statement.HttpResponse.requestUrlContainsVerificationHints(): Boolean =
+    containsVerificationHints(call.request.url)
+
+private fun io.ktor.client.statement.HttpResponse.detectRedirectVerificationUrl(): String? {
+    if (status.value !in 300..399) return null
+    val location = headers["Location"] ?: return null
+    return if (VVOService.containsVerificationHints(location)) location else null
 }
 
-private fun isHtmlResponse(contentType: ContentType?): Boolean =
-    contentType?.match(ContentType.Text.Html) == true
+private suspend fun io.ktor.client.statement.HttpResponse.detectVvoCaptchaUrl(): String? {
+    val contentType = contentType()
+    if (contentType?.match(ContentType.Application.Json) != true) return null
+
+    val text =
+        runCatching {
+            // Ktor 3：用 save() 避免消费原始 response body
+            call.save().response.bodyAsText()
+        }.getOrNull() ?: return null
+    val obj = runCatching { dev.dimension.flare.common.JSON.parseToJsonElement(text) as? JsonObject }.getOrNull()
+        ?: return null
+
+    val ok = obj["ok"]?.jsonPrimitive?.content?.toLongOrNull()
+    val errno = obj["errno"]?.jsonPrimitive?.content
+    val url = obj["url"]?.jsonPrimitive?.content
+
+    val isCaptcha =
+        (ok == -100L) ||
+            (errno == "-100") ||
+            (url != null && VVOService.containsVerificationHints(url))
+
+    if (!isCaptcha) return null
+    return url
+}
+
+private suspend fun io.ktor.client.statement.HttpResponse.detectHtmlVerificationRequired(): Boolean {
+    val contentType = contentType()
+    if (contentType?.match(ContentType.Text.Html) != true) return false
+
+    val text =
+        runCatching {
+            // Ktor 3：用 save() 避免消费原始 response body
+            call.save().response.bodyAsText()
+        }.getOrNull() ?: return false
+
+    val normalized = text.lowercase()
+    return normalized.contains("captcha") ||
+        normalized.contains("secondverify") ||
+        normalized.contains("passport.weibo") ||
+        normalized.contains("/captcha/")
+}
 
 private fun containsVerificationHints(url: Url): Boolean = VVOService.containsVerificationHints(url.toString())
 
-internal class VVOVerificationRequiredException(
-    url: String,
+public class VVOVerificationRequiredException(
+    public val url: String,
+    public val accountKey: MicroBlogKey? = null,
 ) : Exception("Secondary verification required: $url")
+
+// 给 app 模块使用：无需依赖 internal 的 VVOService 类型
+public fun vvoRequiresSecondaryVerification(url: String?): Boolean =
+    url
+        ?.let { VVOService.containsVerificationHints(it) }
+        ?: false

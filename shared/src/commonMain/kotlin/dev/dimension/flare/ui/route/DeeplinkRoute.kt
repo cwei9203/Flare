@@ -180,6 +180,12 @@ public sealed class DeeplinkRoute {
     ) : DeeplinkRoute()
 
     @Serializable
+    public data class VVOSecondaryVerification(
+        val accountKey: MicroBlogKey?,
+        val url: String,
+    ) : DeeplinkRoute()
+
+    @Serializable
     public data class EditUserList(
         val accountKey: MicroBlogKey,
         val userKey: MicroBlogKey,
