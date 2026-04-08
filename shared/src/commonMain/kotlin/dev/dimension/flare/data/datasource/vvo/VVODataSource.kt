@@ -64,6 +64,7 @@ internal class VVODataSource(
     private val imageCompressor: ImageCompressor by inject()
     private val service by lazy {
         VVOService(
+            accountKey = accountKey,
             chocolateFlow =
                 accountRepository
                     .credentialFlow<UiAccount.VVo.Credential>(accountKey)

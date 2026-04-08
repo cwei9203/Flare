@@ -8,6 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import dev.dimension.flare.data.network.vvo.VVOService
+import dev.dimension.flare.data.network.vvo.VVOVerificationRequiredException
 import dev.dimension.flare.data.repository.AccountRepository
 import dev.dimension.flare.model.MicroBlogKey
 import dev.dimension.flare.model.vvoHost
@@ -36,6 +37,11 @@ public class VVOLoginPresenter(
 
             override fun checkChocolate(cookie: String): Boolean = VVOService.checkChocolates(cookie)
 
+            override fun shouldLogin(
+                url: String?,
+                cookie: String,
+            ): Boolean = checkChocolate(cookie) && !VVOService.requiresSecondaryVerification(url)
+
             override fun login(chocolate: String) {
                 scope.launch {
                     loading = true
@@ -61,9 +67,13 @@ public class VVOLoginPresenter(
     ) {
         val service = VVOService(flowOf(chocolate))
         val config = service.config()
-        val uid = config.data?.uid
+        if (config.data?.login != true) {
+            throw VVOVerificationRequiredException("https://$vvoHost/captcha")
+        }
+        val configData = requireNotNull(config.data) { "config is null" }
+        val uid = configData.uid
         requireNotNull(uid) { "uid is null" }
-        val st = config.data.st
+        val st = configData.st
         requireNotNull(st) { "st is null" }
         val profile = service.profileInfo(uid, st)
         requireNotNull(profile.data) { "profile is null" }
@@ -89,6 +99,11 @@ public interface VVOLoginState {
     public val error: Throwable?
 
     public fun checkChocolate(cookie: String): Boolean
+
+    public fun shouldLogin(
+        url: String?,
+        cookie: String,
+    ): Boolean
 
     public fun login(chocolate: String)
 }

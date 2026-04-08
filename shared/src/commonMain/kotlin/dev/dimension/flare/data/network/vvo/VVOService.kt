@@ -13,6 +13,9 @@ import dev.dimension.flare.data.network.vvo.api.createTimelineApi
 import dev.dimension.flare.data.network.vvo.api.createUserApi
 import dev.dimension.flare.data.network.vvo.model.EmojiData
 import dev.dimension.flare.data.network.vvo.model.UploadResponse
+import dev.dimension.flare.data.repository.LoginExpiredException
+import dev.dimension.flare.model.MicroBlogKey
+import dev.dimension.flare.model.PlatformType
 import dev.dimension.flare.model.vvoHost
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpTimeout
@@ -24,6 +27,8 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.Url
+import io.ktor.http.contentType
 import io.ktor.utils.io.core.writeFully
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
@@ -34,18 +39,22 @@ private val baseUrl = "https://$vvoHost/"
 private fun config(
     url: String = baseUrl,
     chocolateFlow: Flow<String>,
+    accountKey: MicroBlogKey? = null,
 ) = ktorfit(url) {
+    expectSuccess = false
     install(VVOHeaderPlugin) {
         this.chocolateFlow = chocolateFlow
+        this.accountKey = accountKey
     }
 }
 
 internal class VVOService(
     private val chocolateFlow: Flow<String>,
-) : TimelineApi by config(chocolateFlow = chocolateFlow).createTimelineApi(),
-    UserApi by config(chocolateFlow = chocolateFlow).createUserApi(),
-    ConfigApi by config(chocolateFlow = chocolateFlow).createConfigApi(),
-    StatusApi by config(chocolateFlow = chocolateFlow).createStatusApi() {
+    private val accountKey: MicroBlogKey? = null,
+) : TimelineApi by config(chocolateFlow = chocolateFlow, accountKey = accountKey).createTimelineApi(),
+    UserApi by config(chocolateFlow = chocolateFlow, accountKey = accountKey).createUserApi(),
+    ConfigApi by config(chocolateFlow = chocolateFlow, accountKey = accountKey).createConfigApi(),
+    StatusApi by config(chocolateFlow = chocolateFlow, accountKey = accountKey).createStatusApi() {
     companion object {
         fun checkChocolates(chocolate: String): Boolean =
             chocolate
@@ -63,6 +72,19 @@ internal class VVOService(
                 .let {
                     it.containsKey("MLOGIN") && it["MLOGIN"] == "1"
                 }
+
+        fun requiresSecondaryVerification(url: String?): Boolean =
+            url
+                ?.let(::containsVerificationHints)
+                ?: false
+
+        internal fun containsVerificationHints(url: String): Boolean {
+            val normalized = url.lowercase()
+            return normalized.contains("/captcha/") ||
+                normalized.contains("captcha/show") ||
+                normalized.contains("secondverify") ||
+                normalized.contains("passport.weibo")
+        }
     }
 
     suspend fun getUid(screenName: String): String? {
@@ -122,11 +144,13 @@ internal class VVOService(
 
 private class VVOHeaderConfig {
     var chocolateFlow: Flow<String>? = null
+    var accountKey: MicroBlogKey? = null
 }
 
 private val VVOHeaderPlugin =
     createClientPlugin("VVOHeaderPlugin", ::VVOHeaderConfig) {
         val chocolateFlow = pluginConfig.chocolateFlow
+        val accountKey = pluginConfig.accountKey
         onRequest { request, _ ->
             chocolateFlow?.let { flow ->
                 val chocolate = flow.firstOrNull()
@@ -136,4 +160,30 @@ private val VVOHeaderPlugin =
             }
             request.headers.append("Referer", "https://$vvoHost/")
         }
+        onResponse { response ->
+            if (response.requiresVerification()) {
+                val exception =
+                    accountKey?.let {
+                        LoginExpiredException(
+                            accountKey = it,
+                            platformType = PlatformType.VVo,
+                        )
+                    } ?: VVOVerificationRequiredException(response.call.request.url.toString())
+                throw exception
+            }
+        }
     }
+
+private fun io.ktor.client.statement.HttpResponse.requiresVerification(): Boolean {
+    val contentType = contentType()
+    return isHtmlResponse(contentType) || containsVerificationHints(call.request.url)
+}
+
+private fun isHtmlResponse(contentType: ContentType?): Boolean =
+    contentType?.match(ContentType.Text.Html) == true
+
+private fun containsVerificationHints(url: Url): Boolean = VVOService.containsVerificationHints(url.toString())
+
+internal class VVOVerificationRequiredException(
+    url: String,
+) : Exception("Secondary verification required: $url")

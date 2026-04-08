@@ -34,8 +34,8 @@ internal fun VVOLoginScreen(toHome: () -> Unit) {
                     CookieManager
                         .getInstance()
                         .getCookie(url)
-                        ?.takeIf {
-                            state.checkChocolate(it)
+                        ?.takeIf { cookie ->
+                            state.shouldLogin(url, cookie)
                         }?.let {
                             state.login(it)
                         }
