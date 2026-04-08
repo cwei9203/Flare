@@ -405,6 +405,12 @@ internal class VVODataSource(
             accountKey = accountKey,
         )
 
+    fun circleTimeline() =
+        CircleTimelineRemoteMediator(
+            service = service,
+            accountKey = accountKey,
+        )
+
     fun statusComment(statusKey: MicroBlogKey): RemoteLoader<UiTimelineV2> =
         StatusCommentRemoteMediator(
             service = service,

@@ -28,6 +28,7 @@ import dev.dimension.flare.ui.presenter.home.rss.AllRssTimelinePresenter
 import dev.dimension.flare.ui.presenter.home.rss.RssTimelinePresenter
 import dev.dimension.flare.ui.presenter.home.rss.SubscriptionTimelinePresenter
 import dev.dimension.flare.ui.presenter.home.vvo.VVOFavouriteTimelinePresenter
+import dev.dimension.flare.ui.presenter.home.vvo.VVOCircleTimelinePresenter
 import dev.dimension.flare.ui.presenter.home.vvo.VVOLikeTimelinePresenter
 import dev.dimension.flare.ui.presenter.home.xqt.XQTBookmarkTimelinePresenter
 import dev.dimension.flare.ui.presenter.home.xqt.XQTDeviceFollowTimelinePresenter
@@ -708,6 +709,19 @@ public object VVo {
         override val key: String = "liked_$account"
 
         override fun createPresenter(): TimelinePresenter = VVOLikeTimelinePresenter(account)
+
+        override fun update(metaData: TabMetaData): TabItem = copy(metaData = metaData)
+    }
+
+    @Immutable
+    @Serializable
+    public data class CircleTimelineTabItem(
+        override val account: AccountType,
+        override val metaData: TabMetaData,
+    ) : TimelineTabItem() {
+        override val key: String = "circle_$account"
+
+        override fun createPresenter(): TimelinePresenter = VVOCircleTimelinePresenter(account)
 
         override fun update(metaData: TabMetaData): TabItem = copy(metaData = metaData)
     }

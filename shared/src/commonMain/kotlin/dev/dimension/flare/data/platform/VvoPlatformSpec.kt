@@ -47,6 +47,13 @@ internal data object VvoPlatformSpec : PlatformSpec {
 
     override fun secondary(accountKey: MicroBlogKey): ImmutableList<TabItem> =
         persistentListOf(
+            VVo.CircleTimelineTabItem(
+                AccountType.Specific(accountKey),
+                TabMetaData(
+                    title = TitleType.Text("好友圈"),
+                    icon = IconType.Mixed(dev.dimension.flare.ui.model.UiIcon.Follow, accountKey),
+                ),
+            ),
             VVo.FeaturedTimelineTabItem(
                 AccountType.Specific(accountKey),
                 TabMetaData(
